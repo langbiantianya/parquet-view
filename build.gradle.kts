@@ -42,9 +42,22 @@ java {
 javafx {
     version = "21.0.6"
     modules = listOf("javafx.controls", "javafx.fxml", "javafx.web", "javafx.swing")
+    configuration = "implementation"
 }
 
 dependencies {
+    // JavaFX platform-specific dependencies for cross-platform JAR
+    val javafxVersion = "21.0.6"
+    val platforms = listOf("win", "linux", "mac")
+    for (platform in platforms) {
+        implementation("org.openjfx:javafx-base:${javafxVersion}:${platform}")
+        implementation("org.openjfx:javafx-controls:${javafxVersion}:${platform}")
+        implementation("org.openjfx:javafx-fxml:${javafxVersion}:${platform}")
+        implementation("org.openjfx:javafx-graphics:${javafxVersion}:${platform}")
+        implementation("org.openjfx:javafx-web:${javafxVersion}:${platform}")
+        implementation("org.openjfx:javafx-swing:${javafxVersion}:${platform}")
+    }
+    
     implementation("org.controlsfx:controlsfx:11.2.1")
     implementation("org.kordamp.ikonli:ikonli-javafx:12.3.1")
     implementation("org.kordamp.bootstrapfx:bootstrapfx-core:0.4.0")
