@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.langbiantianya.parquetview.ParquetViewController"
+            prefHeight="700.0" prefWidth="1000.0">
+    
+    <!-- Top: File Selection and Filter -->
+    <top>
+        <VBox spacing="10.0" style="-fx-background-color: #f0f0f0;">
+            <padding>
+                <Insets top="10.0" right="10.0" bottom="10.0" left="10.0"/>
+            </padding>
+            
+            <!-- File Selection -->
+            <HBox spacing="10.0" alignment="CENTER_LEFT">
+                <Label text="文件:" style="-fx-font-weight: bold;"/>
+                <Label fx:id="filePathLabel" text="未选择文件" style="-fx-text-fill: #666666;"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button text="选择文件" onAction="#onSelectFile" style="-fx-background-color: #4CAF50; -fx-text-fill: white;"/>
+                <Button text="重新加载" onAction="#onReload" style="-fx-background-color: #2196F3; -fx-text-fill: white;"/>
+            </HBox>
+            
+            <Separator/>
+            
+            <!-- WHERE Clause Filter -->
+            <VBox spacing="5.0">
+                <Label text="WHERE 条件查询:" style="-fx-font-weight: bold;"/>
+                <HBox spacing="10.0" alignment="CENTER_LEFT">
+                    <TextField fx:id="whereTextField" promptText="例如: age &gt; 25 或 name = 'John' 或 city LIKE 'Beijing'" HBox.hgrow="ALWAYS"/>
+                    <Button text="应用过滤" onAction="#onApplyFilter" style="-fx-background-color: #FF9800; -fx-text-fill: white;"/>
+                </HBox>
+                <Label text="支持的操作符: =, &gt;, &lt;, &gt;=, &lt;=, LIKE" style="-fx-font-size: 10px; -fx-text-fill: #888888;"/>
+            </VBox>
+        </VBox>
+    </top>
+    
+    <!-- Center: Data Table -->
+    <center>
+        <TableView fx:id="dataTableView" BorderPane.alignment="CENTER">
+            <placeholder>
+                <Label text="请选择一个 Parquet 文件以查看数据"/>
+            </placeholder>
+        </TableView>
+    </center>
+    
+    <!-- Bottom: Status Bar and Pagination -->
+    <bottom>
+        <VBox spacing="0">
+            <!-- Pagination Controls -->
+            <HBox spacing="10.0" style="-fx-background-color: #f5f5f5;" alignment="CENTER_RIGHT">
+                <padding>
+                    <Insets top="5.0" right="10.0" bottom="5.0" left="10.0"/>
+                </padding>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label text="每页行数:"/>
+                <ComboBox fx:id="pageSizeComboBox" prefWidth="100.0"/>
+                <Separator orientation="VERTICAL"/>
+                <Button fx:id="prevPageButton" text="上一页" onAction="#onPrevPage" disable="true" 
+                        style="-fx-background-color: #2196F3; -fx-text-fill: white;"/>
+                <Label fx:id="pageInfoLabel" text="页码: - | 已读取: -" style="-fx-font-weight: bold;"/>
+                <Button fx:id="nextPageButton" text="下一页" onAction="#onNextPage" disable="true"
+                        style="-fx-background-color: #2196F3; -fx-text-fill: white;"/>
+            </HBox>
+            
+            <!-- Status Bar -->
+            <HBox spacing="10.0" style="-fx-background-color: #e0e0e0;" alignment="CENTER_LEFT">
+                <padding>
+                    <Insets top="5.0" right="10.0" bottom="5.0" left="10.0"/>
+                </padding>
+                <Label text="状态:" style="-fx-font-weight: bold;"/>
+                <Label fx:id="statusLabel" text="就绪"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="recordCountLabel" text="记录数: 0" style="-fx-font-weight: bold;"/>
+            </HBox>
+        </VBox>
+    </bottom>
+    
+</BorderPane>
