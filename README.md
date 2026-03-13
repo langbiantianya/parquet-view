@@ -258,7 +258,7 @@ parquet-view/
 
 - **Java** 21 或更高版本
 - **内存**: 最小 512MB，推荐 2GB+
-- **操作系统**: Windows 10+, macOS 10.14+, Linux (任何现代发行版)
+- **操作系统**: Windows 7+, macOS 10.14+, Linux (任何现代发行版)
 
 ## 版本历史
 
