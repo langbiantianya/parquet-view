@@ -279,12 +279,6 @@ parquet-view/
 
 欢迎提交 Issue 和 Pull Request！
 
-## 许可证
-
-[您的许可证]
-
 ---
-
-**作者**: Parquet View Team  
 **更新日期**: 2026-03-13  
 **版本**: 2.0
