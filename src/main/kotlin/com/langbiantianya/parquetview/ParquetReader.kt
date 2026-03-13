@@ -9,19 +9,21 @@ import net.sf.jsqlparser.schema.Column
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.example.data.Group
+import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.hadoop.example.GroupReadSupport
 import org.apache.parquet.schema.GroupType
-import org.apache.parquet.schema.Type
 import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.apache.parquet.schema.PrimitiveType
-import org.apache.parquet.hadoop.ParquetReader as ApacheParquetReader
+import org.apache.parquet.schema.Type
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
+import org.apache.parquet.hadoop.ParquetReader as ApacheParquetReader
 
 class ParquetReader {
+    
+    private val filterConverter = SqlToParquetFilterConverter()
 
     data class ParquetData(
         val schema: List<String>,
@@ -448,6 +450,134 @@ class ParquetReader {
         }
         
         return ParquetData(schema, rows)
+    }
+    
+    /**
+     * 使用Parquet Filter API进行高效过滤（谓词下推）
+     * 这种方法在读取时就过滤数据，而不是读取后再过滤，效率更高
+     * 
+     * @param filePath 文件路径
+     * @param whereClause WHERE条件
+     * @param limit 结果限制
+     * @param progressCallback 进度回调
+     * @return 过滤后的数据
+     */
+    fun filterWithParquetAPI(
+        filePath: String,
+        whereClause: String,
+        limit: Int = Int.MAX_VALUE,
+        progressCallback: ((Int, Int) -> Unit)? = null
+    ): ParquetData {
+        val conf = Configuration()
+        
+        // Configure Hadoop to use local filesystem
+        conf.set("fs.defaultFS", "file:///")
+        conf.set("fs.file.impl", "org.apache.hadoop.fs.LocalFileSystem")
+        conf.set("fs.hdfs.impl", "org.apache.hadoop.hdfs.DistributedFileSystem")
+        
+        val path = Path(filePath)
+        val schema = mutableListOf<String>()
+        val rows = mutableListOf<Map<String, Any?>>()
+        
+        // 转换SQL WHERE条件为Parquet FilterPredicate
+        val filterPredicate = filterConverter.convertToFilter(whereClause)
+        
+        val readSupport = GroupReadSupport()
+        val readerBuilder = ApacheParquetReader.builder<Group>(readSupport, path)
+            .withConf(conf)
+        
+        // 如果成功转换为FilterPredicate，则应用过滤
+        if (filterPredicate != null) {
+            readerBuilder.withFilter(FilterCompat.get(filterPredicate))
+            println("Applied Parquet filter predicate for WHERE clause: $whereClause")
+        } else {
+            println("Could not convert WHERE clause to Parquet filter, will filter in memory")
+        }
+        
+        val reader = readerBuilder.build()
+        
+        reader.use { parquetReader ->
+            var group: Group? = parquetReader.read()
+            var fileSchema: GroupType? = null
+            
+            // Get schema from first record
+            if (group != null) {
+                fileSchema = group.type
+                fileSchema.fields.forEach { field ->
+                    schema.add(field.name)
+                }
+            }
+            
+            var rowCount = 0
+            var totalRead = 0
+            
+            while (group != null && rowCount < limit) {
+                val rowMap = mutableMapOf<String, Any?>()
+                
+                fileSchema?.fields?.forEachIndexed { index, field ->
+                    try {
+                        val value = if (group.getFieldRepetitionCount(index) > 0) {
+                            extractValue(group, index, field)
+                        } else {
+                            null
+                        }
+                        rowMap[field.name] = value
+                    } catch (e: Exception) {
+                        rowMap[field.name] = null
+                    }
+                }
+                
+                // 如果没有使用Parquet过滤器，则在内存中过滤
+                val shouldInclude = if (filterPredicate == null && whereClause.isNotBlank()) {
+                    try {
+                        val expression = CCJSqlParserUtil.parseCondExpression(whereClause)
+                        evaluateExpression(expression, rowMap)
+                    } catch (e: Exception) {
+                        false
+                    }
+                } else {
+                    true // Parquet已经过滤或无需过滤
+                }
+                
+                if (shouldInclude) {
+                    rows.add(rowMap)
+                    rowCount++
+                }
+                
+                totalRead++
+                
+                // Report progress every 10000 rows
+                if (totalRead % 10000 == 0) {
+                    progressCallback?.invoke(totalRead, rowCount)
+                }
+                
+                group = parquetReader.read()
+            }
+            
+            // Final progress report
+            progressCallback?.invoke(totalRead, rowCount)
+        }
+        
+        return ParquetData(schema, rows)
+    }
+    
+    /**
+     * 智能过滤 - 优先使用Parquet Filter API，回退到内存过滤
+     * 这是推荐的过滤方法
+     * 
+     * @param filePath 文件路径
+     * @param whereClause WHERE条件
+     * @param limit 结果限制
+     * @param progressCallback 进度回调
+     * @return 过滤后的数据
+     */
+    fun smartFilter(
+        filePath: String,
+        whereClause: String,
+        limit: Int = Int.MAX_VALUE,
+        progressCallback: ((Int, Int) -> Unit)? = null
+    ): ParquetData {
+        return filterWithParquetAPI(filePath, whereClause, limit, progressCallback)
     }
 
     private fun extractValue(group: Group, fieldIndex: Int, field: Type): Any? {

@@ -47,8 +47,9 @@ javafx {
 
 dependencies {
     // JavaFX platform-specific dependencies for cross-platform JAR
+    // Note: linux-aarch64 is not available in JavaFX 21.0.6
     val javafxVersion = "21.0.6"
-    val platforms = listOf("win", "linux", "mac")
+    val platforms = listOf("win", "linux", "mac", "mac-aarch64")
     for (platform in platforms) {
         implementation("org.openjfx:javafx-base:${javafxVersion}:${platform}")
         implementation("org.openjfx:javafx-controls:${javafxVersion}:${platform}")
@@ -71,11 +72,16 @@ dependencies {
     
     // Parquet dependencies
     implementation("org.apache.parquet:parquet-hadoop:1.17.0")
+    implementation("org.apache.parquet:parquet-column:1.17.0")
+    implementation("org.apache.parquet:parquet-common:1.17.0")
     implementation("org.apache.hadoop:hadoop-common:3.4.3")
     implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.4.3")
     
     // Hadoop local filesystem support
     implementation("org.apache.hadoop:hadoop-client:3.4.3")
+    
+    // Apache Calcite for SQL parsing and optimization
+    implementation("org.apache.calcite:calcite-core:1.40.0")
     
     // Logging - Logback
     implementation("ch.qos.logback:logback-classic:1.5.32")
@@ -128,6 +134,9 @@ tasks.shadowJar {
     archiveClassifier.set("")
     archiveVersion.set(version.toString())
     
+    // Enable zip64 for large archives
+    isZip64 = true
+    
     manifest {
         attributes["Main-Class"] = "com.langbiantianya.parquetview.ParquetCliKt"
     }
@@ -152,6 +161,9 @@ tasks.register<ShadowJar>("guiJar") {
     archiveBaseName.set("parquet-view-gui")
     archiveClassifier.set("")
     archiveVersion.set(version.toString())
+    
+    // Enable zip64 for large archives
+    isZip64 = true
     
     manifest {
         attributes["Main-Class"] = "com.langbiantianya.parquetview.LauncherKt"

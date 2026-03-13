@@ -5,9 +5,9 @@ import javafx.beans.property.SimpleStringProperty
 import javafx.collections.FXCollections
 import javafx.fxml.FXML
 import javafx.scene.control.*
+import javafx.scene.input.*
 import javafx.stage.FileChooser
 import kotlinx.coroutines.*
-import java.io.File
 
 class ParquetViewController {
     
@@ -78,6 +78,9 @@ class ParquetViewController {
                 onPageSizeChanged()
             }
         }
+        
+        // Setup copy functionality for table
+        setupTableCopyFunctionality()
     }
     
     private fun onPageSizeChanged() {
@@ -475,5 +478,213 @@ class ParquetViewController {
         alert.headerText = null
         alert.contentText = message
         alert.showAndWait()
+    }
+    
+    /**
+     * 设置表格的复制功能
+     */
+    private fun setupTableCopyFunctionality() {
+        // Enable cell selection
+        dataTableView.selectionModel.cellSelectionEnabledProperty().value = true
+        dataTableView.selectionModel.selectionMode = SelectionMode.MULTIPLE
+        
+        // Add keyboard shortcut (Ctrl+C or Cmd+C)
+        val copyKeyCombo = KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN)
+        dataTableView.setOnKeyPressed { event ->
+            if (copyKeyCombo.match(event)) {
+                copySelectionToClipboard()
+                event.consume()
+            }
+        }
+        
+        // Add context menu (right-click)
+        val contextMenu = ContextMenu()
+        
+        val copyMenuItem = MenuItem("复制")
+        copyMenuItem.setOnAction {
+            copySelectionToClipboard()
+        }
+        
+        val copyRowMenuItem = MenuItem("复制整行")
+        copyRowMenuItem.setOnAction {
+            copySelectedRowsToClipboard()
+        }
+        
+        val copyColumnMenuItem = MenuItem("复制列名")
+        copyColumnMenuItem.setOnAction {
+            copySelectedColumnsToClipboard()
+        }
+        
+        val copyAllMenuItem = MenuItem("复制所有数据")
+        copyAllMenuItem.setOnAction {
+            copyAllDataToClipboard()
+        }
+        
+        contextMenu.items.addAll(copyMenuItem, copyRowMenuItem, copyColumnMenuItem, SeparatorMenuItem(), copyAllMenuItem)
+        
+        dataTableView.contextMenu = contextMenu
+        
+        // Show context menu on right click
+        dataTableView.setOnContextMenuRequested { event ->
+            if (dataTableView.selectionModel.selectedCells.isNotEmpty()) {
+                contextMenu.show(dataTableView, event.screenX, event.screenY)
+            }
+        }
+    }
+    
+    /**
+     * 复制选中的单元格到剪贴板
+     * 支持单个或多个单元格选择，以TSV格式复制（适合粘贴到Excel）
+     */
+    private fun copySelectionToClipboard() {
+        val selectedCells = dataTableView.selectionModel.selectedCells
+        
+        if (selectedCells.isEmpty()) {
+            return
+        }
+        
+        try {
+            // Group cells by row
+            val cellsByRow = selectedCells.groupBy { it.row }
+            
+            val stringBuilder = StringBuilder()
+            
+            // Sort by row index
+            cellsByRow.keys.sorted().forEach { rowIndex ->
+                val cellsInRow = cellsByRow[rowIndex]!!.sortedBy { it.column }
+                
+                val rowData = mutableListOf<String>()
+                cellsInRow.forEach { cell ->
+                    val column = cell.tableColumn as? TableColumn<Map<String, Any?>, String>
+                    if (column != null) {
+                        val item = dataTableView.items[rowIndex]
+                        val columnName = column.text
+                        val value = item[columnName]?.toString() ?: ""
+                        rowData.add(value)
+                    }
+                }
+                
+                stringBuilder.append(rowData.joinToString("\t"))
+                stringBuilder.append("\n")
+            }
+            
+            val content = ClipboardContent()
+            content.putString(stringBuilder.toString().trim())
+            Clipboard.getSystemClipboard().setContent(content)
+            
+            // Show feedback
+            val cellCount = selectedCells.size
+            statusLabel.text = "已复制 $cellCount 个单元格到剪贴板"
+            
+        } catch (e: Exception) {
+            statusLabel.text = "复制失败: ${e.message}"
+            e.printStackTrace()
+        }
+    }
+    
+    /**
+     * 复制选中的整行到剪贴板
+     */
+    private fun copySelectedRowsToClipboard() {
+        val selectedRows = dataTableView.selectionModel.selectedItems
+        
+        if (selectedRows.isEmpty()) {
+            return
+        }
+        
+        try {
+            val stringBuilder = StringBuilder()
+            
+            // Add header row
+            val schema = currentData?.schema ?: return
+            stringBuilder.append(schema.joinToString("\t"))
+            stringBuilder.append("\n")
+            
+            // Add data rows
+            selectedRows.forEach { row ->
+                val rowData = schema.map { columnName ->
+                    row[columnName]?.toString() ?: ""
+                }
+                stringBuilder.append(rowData.joinToString("\t"))
+                stringBuilder.append("\n")
+            }
+            
+            val content = ClipboardContent()
+            content.putString(stringBuilder.toString().trim())
+            Clipboard.getSystemClipboard().setContent(content)
+            
+            statusLabel.text = "已复制 ${selectedRows.size} 行到剪贴板"
+            
+        } catch (e: Exception) {
+            statusLabel.text = "复制失败: ${e.message}"
+            e.printStackTrace()
+        }
+    }
+    
+    /**
+     * 复制选中列的列名
+     */
+    private fun copySelectedColumnsToClipboard() {
+        val selectedCells = dataTableView.selectionModel.selectedCells
+        
+        if (selectedCells.isEmpty()) {
+            return
+        }
+        
+        try {
+            val columnNames = selectedCells
+                .map { it.tableColumn.text }
+                .distinct()
+                .sorted()
+            
+            val content = ClipboardContent()
+            content.putString(columnNames.joinToString("\t"))
+            Clipboard.getSystemClipboard().setContent(content)
+            
+            statusLabel.text = "已复制 ${columnNames.size} 个列名到剪贴板"
+            
+        } catch (e: Exception) {
+            statusLabel.text = "复制失败: ${e.message}"
+            e.printStackTrace()
+        }
+    }
+    
+    /**
+     * 复制所有数据到剪贴板（包括表头）
+     */
+    private fun copyAllDataToClipboard() {
+        val data = currentData ?: return
+        
+        if (data.rows.isEmpty()) {
+            statusLabel.text = "没有数据可复制"
+            return
+        }
+        
+        try {
+            val stringBuilder = StringBuilder()
+            
+            // Add header row
+            stringBuilder.append(data.schema.joinToString("\t"))
+            stringBuilder.append("\n")
+            
+            // Add all data rows
+            data.rows.forEach { row ->
+                val rowData = data.schema.map { columnName ->
+                    row[columnName]?.toString() ?: ""
+                }
+                stringBuilder.append(rowData.joinToString("\t"))
+                stringBuilder.append("\n")
+            }
+            
+            val content = ClipboardContent()
+            content.putString(stringBuilder.toString().trim())
+            Clipboard.getSystemClipboard().setContent(content)
+            
+            statusLabel.text = "已复制所有 ${data.rows.size} 行数据到剪贴板"
+            
+        } catch (e: Exception) {
+            statusLabel.text = "复制失败: ${e.message}"
+            e.printStackTrace()
+        }
     }
 }
